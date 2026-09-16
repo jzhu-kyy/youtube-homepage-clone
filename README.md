@@ -2,6 +2,8 @@
 
 A polished YouTube-inspired homepage, watch experience, and persistent user library built for the ProductSC developer challenge.
 
+**Live demo:** [judy-youtube-clone.netlify.app](https://judy-youtube-clone.netlify.app)
+
 ## Challenge coverage
 
 - Recognizable responsive YouTube-style homepage with sidebar navigation, category chips, video cards, search, and account controls.
