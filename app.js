@@ -206,6 +206,14 @@ const shorts = [
   { id: "cB0xf0CbBAo", title: "that one girl with no friends", views: "4.2M views" }
 ];
 
+function initialFocusState() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem("focustube_session") || "null");
+    if (saved?.active && saved.topic && saved.startedAt) return { ...saved, watched: Array.isArray(saved.watched) ? saved.watched : [] };
+  } catch {}
+  return { active: false, topic: "", startedAt: 0, watched: [], nudges: 0, distractionsAvoided: 0 };
+}
+
 const state = {
   category: "All",
   feedChip: "All",
@@ -219,9 +227,10 @@ const state = {
   user: null,
   authToken: localStorage.getItem("yt_auth_token") || "",
   authMode: "login",
-  library: { favorites: [], history: [] },
+  library: { favorites: [], history: [], focusSessions: [] },
   libraryLoading: false,
-  libraryError: ""
+  libraryError: "",
+  focus: initialFocusState()
 };
 
 const app = document.getElementById("app");
@@ -245,6 +254,19 @@ const nameField = document.getElementById("nameField");
 const networkBanner = document.getElementById("networkBanner");
 const pageLoader = document.getElementById("pageLoader");
 const toast = document.getElementById("toast");
+const focusWelcomeModal = document.getElementById("focusWelcomeModal");
+const focusChoiceStep = document.getElementById("focusChoiceStep");
+const focusSetupStep = document.getElementById("focusSetupStep");
+const focusTopicInput = document.getElementById("focusTopicInput");
+const focusIsland = document.getElementById("focusIsland");
+const focusIslandTopic = document.getElementById("focusIslandTopic");
+const focusTimer = document.getElementById("focusTimer");
+const focusNudge = document.getElementById("focusNudge");
+const focusNudgeText = document.getElementById("focusNudgeText");
+const focusSummaryModal = document.getElementById("focusSummaryModal");
+
+let focusTimerHandle;
+let pendingFocusVideoId = "";
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
@@ -299,6 +321,136 @@ function showNetworkMessage(message) {
 
 function hideNetworkMessage() {
   networkBanner.hidden = true;
+}
+
+function formatFocusTime(totalSeconds) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return hours ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+function focusElapsedSeconds() {
+  return state.focus.active ? Math.max(0, Math.floor((Date.now() - state.focus.startedAt) / 1000)) : 0;
+}
+
+function persistFocusSession() {
+  if (state.focus.active) sessionStorage.setItem("focustube_session", JSON.stringify(state.focus));
+  else sessionStorage.removeItem("focustube_session");
+}
+
+function updateFocusIsland() {
+  if (!state.focus.active) {
+    focusIsland.hidden = true;
+    return;
+  }
+  focusIsland.hidden = false;
+  focusIslandTopic.textContent = state.focus.topic;
+  focusTimer.textContent = formatFocusTime(focusElapsedSeconds());
+}
+
+function startFocusTimer() {
+  clearInterval(focusTimerHandle);
+  updateFocusIsland();
+  focusTimerHandle = setInterval(updateFocusIsland, 1000);
+}
+
+function videoMatchesFocus(video) {
+  if (!state.focus.active) return true;
+  const topic = state.focus.topic.toLowerCase();
+  const ignored = new Set(["the", "and", "for", "with", "from", "learn", "learning", "study", "about"]);
+  const tokens = topic.split(/[^a-z0-9]+/).filter(token => token.length > 2 && !ignored.has(token));
+  const haystack = `${video.title} ${video.channel} ${video.category} ${video.description || ""}`.toLowerCase();
+  const exactMatch = tokens.some(token => haystack.includes(token));
+  if (exactMatch) return true;
+  if (["Music", "Movies", "Trending"].includes(video.category)) return false;
+  return ["Coding", "Design"].includes(video.category);
+}
+
+function focusedVideos() {
+  const topic = state.focus.topic.toLowerCase();
+  const tokens = topic.split(/[^a-z0-9]+/).filter(token => token.length > 2);
+  return videos.filter(videoMatchesFocus).sort((a, b) => {
+    const aText = `${a.title} ${a.category} ${a.description}`.toLowerCase();
+    const bText = `${b.title} ${b.category} ${b.description}`.toLowerCase();
+    const aScore = tokens.filter(token => aText.includes(token)).length;
+    const bScore = tokens.filter(token => bText.includes(token)).length;
+    return bScore - aScore || b.views - a.views;
+  });
+}
+
+function openFocusWelcome() {
+  focusChoiceStep.hidden = false;
+  focusSetupStep.hidden = true;
+  focusWelcomeModal.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function closeFocusWelcome() {
+  focusWelcomeModal.hidden = true;
+  document.body.style.overflow = "";
+}
+
+function startFocusSession(topic) {
+  state.focus = { active: true, topic: topic.trim(), startedAt: Date.now(), watched: [], nudges: 0, distractionsAvoided: 0 };
+  sessionStorage.setItem("focus_prompt_seen", "true");
+  persistFocusSession();
+  closeFocusWelcome();
+  state.category = "All";
+  state.feedChip = "All";
+  state.query = "";
+  searchInput.value = "";
+  location.hash = "";
+  startFocusTimer();
+  renderHome();
+  showToast(`FocusTube started: ${state.focus.topic}`);
+}
+
+function trackFocusVideo(video) {
+  if (!state.focus.active || state.focus.watched.includes(video.id)) return;
+  state.focus.watched.push(video.id);
+  persistFocusSession();
+}
+
+function showFocusNudge(video) {
+  pendingFocusVideoId = video.id;
+  state.focus.nudges += 1;
+  persistFocusSession();
+  focusNudgeText.textContent = `“${video.title}” may not support your goal: ${state.focus.topic}.`;
+  focusNudge.hidden = false;
+}
+
+async function saveFocusSummary(summary) {
+  if (!state.user) return;
+  try {
+    state.library = await api("/api/library", { method: "POST", body: JSON.stringify({ action: "focus-session", session: summary }) });
+  } catch {}
+}
+
+function endFocusSession() {
+  if (!state.focus.active) return;
+  const summary = {
+    topic: state.focus.topic,
+    durationSeconds: focusElapsedSeconds(),
+    videosWatched: state.focus.watched.length,
+    distractionsAvoided: state.focus.distractionsAvoided,
+    endedAt: new Date().toISOString()
+  };
+  clearInterval(focusTimerHandle);
+  state.focus.active = false;
+  persistFocusSession();
+  focusIsland.hidden = true;
+  focusNudge.hidden = true;
+  document.getElementById("summaryTime").textContent = formatFocusTime(summary.durationSeconds);
+  document.getElementById("summaryVideos").textContent = String(summary.videosWatched);
+  document.getElementById("summaryNudges").textContent = String(summary.distractionsAvoided);
+  document.getElementById("summaryTopic").textContent = summary.topic;
+  document.getElementById("focusSummarySubtitle").textContent = summary.videosWatched ? "Nice work showing up with intention." : "You protected time for your learning goal.";
+  focusSummaryModal.hidden = false;
+  document.body.style.overflow = "hidden";
+  saveFocusSummary(summary);
+  render();
 }
 
 function verifiedBadge(video) {
@@ -368,7 +520,7 @@ function updateAuthUI() {
 function clearSession() {
   state.user = null;
   state.authToken = "";
-  state.library = { favorites: [], history: [] };
+  state.library = { favorites: [], history: [], focusSessions: [] };
   state.liked.clear();
   localStorage.removeItem("yt_auth_token");
   updateAuthUI();
@@ -468,16 +620,19 @@ function shortCard(item) {
 }
 
 function renderHome() {
-  const categories = ["Your custom feed", "All", "Colleges", "Podcasts", "AP US History", "Music", "Advanced Placement", "High School Learning", "Mixes", "Live", "Gaming"];
-  const results = filteredVideos();
+  const allCategories = ["Your custom feed", "All", "Colleges", "Podcasts", "AP US History", "Music", "Advanced Placement", "High School Learning", "Mixes", "Live", "Gaming"];
+  const categories = state.focus.active ? allCategories.filter(category => !["Music", "Mixes", "Gaming"].includes(category)) : allCategories;
+  const isFocusFeed = state.focus.active && !state.query && state.category === "All";
+  const results = isFocusFeed ? focusedVideos() : filteredVideos();
   const heading = state.query ? `Results for “${escapeHtml(state.query)}”` : "Recommended";
-  const isDefaultFeed = !state.query && state.category === "All";
+  const isDefaultFeed = !state.focus.active && !state.query && state.category === "All";
   main.innerHTML = `
     <div class="feed-shell">
+      ${isFocusFeed ? `<header class="focus-feed-header"><div><p class="focus-feed-header__eyebrow">DISTRACTION-FREE FEED</p><h1>Learn ${escapeHtml(state.focus.topic)}</h1><p>Shorts and entertainment recommendations are hidden during this session.</p></div><span class="focus-feed-header__badge">${results.length} focused picks</span></header>` : ""}
       <div class="chips-bar" aria-label="Video categories">
         ${categories.map(category => `<button class="chip ${state.feedChip === category ? "is-active" : ""}" data-category="${category}">${category}</button>`).join("")}
       </div>
-      ${isDefaultFeed ? `
+      ${isFocusFeed ? `${results.length ? `<div class="video-grid">${results.map(videoCard).join("")}</div>` : `<div class="empty-state"><div><div class="empty-state__icon">◎</div><h2>No focused videos found</h2><p>Try a broader learning topic or use search.</p></div></div>`}` : isDefaultFeed ? `
         <div class="home-top-grid">${sponsoredCard()}${videos.slice(1, 3).map(videoCard).join("")}</div>
         <section class="shorts-shelf" aria-labelledby="shortsHeading">
           <div class="shorts-shelf__header"><h2 class="shorts-shelf__title" id="shortsHeading"><span class="shorts-shelf__logo"></span>Shorts</h2><button class="icon-button" aria-label="Shorts actions"><span class="icon" data-icon="more"></span></button></div>
@@ -575,7 +730,7 @@ function renderWatch(video) {
   const isLiked = state.userLikes.has(video.id);
   const isSaved = state.liked.has(video.id);
   const isSubscribed = state.subscribed.has(video.channel);
-  const recommendations = videos.filter(item => item.id !== video.id).slice(0, 8);
+  const recommendations = videos.filter(item => item.id !== video.id && (!state.focus.active || videoMatchesFocus(item))).slice(0, 8);
   main.innerHTML = `
     <div class="watch-shell">
       <div class="watch-layout">
@@ -584,6 +739,7 @@ function renderWatch(video) {
             <iframe src="https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0" title="${escapeHtml(video.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
           </div>
           <div class="watch-detail">
+            ${state.focus.active ? `<div class="focus-watch-context"><span>◎ FocusTube</span>Learning ${escapeHtml(state.focus.topic)}</div>` : ""}
             <h1 class="watch-title">${escapeHtml(video.title)}</h1>
             <div class="watch-actions">
               <div class="channel-block">
@@ -634,9 +790,15 @@ function render() {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 
-function openVideo(id) {
-  location.hash = `watch=${encodeURIComponent(id)}`;
+function openVideo(id, bypassFocusCheck = false) {
   const video = videos.find(item => item.id === id);
+  if (!video) return;
+  if (state.focus.active && !bypassFocusCheck && !videoMatchesFocus(video)) {
+    showFocusNudge(video);
+    return;
+  }
+  trackFocusVideo(video);
+  location.hash = `watch=${encodeURIComponent(id)}`;
   if (video && state.user) recordWatch(video);
 }
 
@@ -804,9 +966,64 @@ searchInput.addEventListener("input", event => {
 });
 
 document.getElementById("voiceButton").addEventListener("click", () => showToast("Try saying “coding” or “music”"));
-document.getElementById("askButton").addEventListener("click", () => showToast("Ask YouTube is ready"));
+document.getElementById("askButton").addEventListener("click", () => {
+  if (state.focus.active) showToast(`FocusTube is active: ${state.focus.topic}`);
+  else openFocusWelcome();
+});
 document.getElementById("createButton").addEventListener("click", () => showToast("Create menu opened"));
 document.getElementById("notificationButton").addEventListener("click", () => showToast("You’re all caught up"));
+
+document.getElementById("focusSkipButton").addEventListener("click", () => {
+  sessionStorage.setItem("focus_prompt_seen", "true");
+  closeFocusWelcome();
+});
+document.getElementById("focusChooseButton").addEventListener("click", () => {
+  focusChoiceStep.hidden = true;
+  focusSetupStep.hidden = false;
+  setTimeout(() => focusTopicInput.focus(), 0);
+});
+document.getElementById("focusBackButton").addEventListener("click", () => {
+  focusSetupStep.hidden = true;
+  focusChoiceStep.hidden = false;
+});
+document.querySelectorAll("[data-focus-topic]").forEach(button => button.addEventListener("click", () => {
+  focusTopicInput.value = button.dataset.focusTopic;
+  focusTopicInput.focus();
+}));
+focusSetupStep.addEventListener("submit", event => {
+  event.preventDefault();
+  if (!focusTopicInput.reportValidity()) return;
+  startFocusSession(focusTopicInput.value);
+  focusTopicInput.value = "";
+});
+document.getElementById("focusEndButton").addEventListener("click", endFocusSession);
+document.getElementById("focusNudgeClose").addEventListener("click", () => {
+  focusNudge.hidden = true;
+  pendingFocusVideoId = "";
+});
+document.getElementById("focusReturnButton").addEventListener("click", () => {
+  state.focus.distractionsAvoided += 1;
+  persistFocusSession();
+  focusNudge.hidden = true;
+  pendingFocusVideoId = "";
+  state.query = "";
+  state.category = "All";
+  state.feedChip = "All";
+  searchInput.value = "";
+  location.hash = "";
+  renderHome();
+  showToast("Back to your learning goal");
+});
+document.getElementById("focusContinueButton").addEventListener("click", () => {
+  const id = pendingFocusVideoId;
+  focusNudge.hidden = true;
+  pendingFocusVideoId = "";
+  if (id) openVideo(id, true);
+});
+document.getElementById("focusSummaryClose").addEventListener("click", () => {
+  focusSummaryModal.hidden = true;
+  document.body.style.overflow = "";
+});
 
 profileButton.addEventListener("click", event => {
   event.stopPropagation();
@@ -881,6 +1098,11 @@ sidebarNav.addEventListener("click", event => {
   const item = event.target.closest("[data-nav]");
   if (!item) return;
   const label = item.dataset.nav;
+  if (state.focus.active && ["Shorts", "Trending", "Music", "Movies"].includes(label)) {
+    showToast(`${label} is hidden during FocusTube`);
+    app.classList.remove("is-mobile-nav-open");
+    return;
+  }
   if (["Home", "Trending", "Music", "Movies"].includes(label)) {
     state.category = label === "Home" ? "All" : label;
     state.feedChip = label === "Home" ? "All" : label;
@@ -915,3 +1137,10 @@ renderSidebar();
 updateAuthUI();
 render();
 restoreSession().then(render);
+if (state.focus.active) {
+  startFocusTimer();
+  const selectedVideo = getSelectedVideo();
+  if (selectedVideo && !videoMatchesFocus(selectedVideo)) setTimeout(() => showFocusNudge(selectedVideo), 350);
+} else if (!sessionStorage.getItem("focus_prompt_seen")) {
+  setTimeout(openFocusWelcome, 450);
+}

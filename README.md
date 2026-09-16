@@ -13,6 +13,7 @@ A polished YouTube-inspired homepage, watch experience, and persistent user libr
 - Real serverless backend using Netlify Functions and Netlify Blobs.
 - Account registration, secure salted password hashing, login sessions, and sign out.
 - Persistent saved videos and watch history, synced per account.
+- FocusTube learning mode with a topic-shaped feed, live study timer, Shorts and entertainment filtering, off-topic nudges, and persistent session summaries.
 - Loading skeletons, signed-out and empty states, retry states, offline feedback, and image fallbacks.
 - Mobile layouts for the feed, watch page, library, navigation drawer, and authentication flow.
 

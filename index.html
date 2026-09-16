@@ -94,6 +94,70 @@
       </section>
     </div>
 
+    <section class="focus-island" id="focusIsland" aria-label="FocusTube learning session" hidden>
+      <span class="focus-island__pulse" aria-hidden="true"></span>
+      <div class="focus-island__copy">
+        <span>FOCUSTUBE</span>
+        <strong id="focusIslandTopic">Learning</strong>
+      </div>
+      <time class="focus-island__timer" id="focusTimer">00:00</time>
+      <button class="focus-island__end" id="focusEndButton" type="button">End</button>
+    </section>
+
+    <div class="focus-backdrop" id="focusWelcomeModal" hidden>
+      <section class="focus-modal" role="dialog" aria-modal="true" aria-label="FocusTube setup">
+        <div class="focus-modal__mark" aria-hidden="true">◎</div>
+        <div id="focusChoiceStep">
+          <p class="focus-modal__eyebrow">INTRODUCING FOCUSTUBE</p>
+          <h2 id="focusWelcomeTitle">Watch with intention.</h2>
+          <p>Turn YouTube into a calmer learning space. FocusTube hides distracting recommendations, tracks your study time, and helps you stay on topic.</p>
+          <div class="focus-benefits">
+            <span>Shorts hidden</span><span>Study timer</span><span>Gentle nudges</span>
+          </div>
+          <div class="focus-modal__actions">
+            <button class="focus-button focus-button--ghost" id="focusSkipButton" type="button">Use regular YouTube</button>
+            <button class="focus-button" id="focusChooseButton" type="button">Enter learning mode</button>
+          </div>
+        </div>
+        <form id="focusSetupStep" hidden>
+          <button class="focus-modal__back" id="focusBackButton" type="button" aria-label="Go back">←</button>
+          <p class="focus-modal__eyebrow">SET YOUR INTENTION</p>
+          <h2>What do you want to learn?</h2>
+          <p>Your topic will shape the feed and help FocusTube recognize distracting content.</p>
+          <label class="focus-topic-field"><span>Learning topic</span><input id="focusTopicInput" placeholder="e.g. Web development" maxlength="60" required /></label>
+          <div class="focus-topic-presets" aria-label="Suggested topics">
+            <button type="button" data-focus-topic="Web development">Web development</button>
+            <button type="button" data-focus-topic="Product design">Product design</button>
+            <button type="button" data-focus-topic="Computer science">Computer science</button>
+          </div>
+          <button class="focus-button focus-button--wide" type="submit">Start learning</button>
+        </form>
+      </section>
+    </div>
+
+    <aside class="focus-nudge" id="focusNudge" role="dialog" aria-labelledby="focusNudgeTitle" hidden>
+      <button class="focus-nudge__close" id="focusNudgeClose" type="button" aria-label="Close">×</button>
+      <span class="focus-nudge__icon" aria-hidden="true">◎</span>
+      <div><p>FOCUS CHECK</p><h2 id="focusNudgeTitle">This looks off-topic.</h2><span id="focusNudgeText"></span></div>
+      <div class="focus-nudge__actions"><button id="focusReturnButton" type="button">Back to learning</button><button id="focusContinueButton" type="button">Watch anyway</button></div>
+    </aside>
+
+    <div class="focus-backdrop" id="focusSummaryModal" hidden>
+      <section class="focus-modal focus-summary" role="dialog" aria-modal="true" aria-labelledby="focusSummaryTitle">
+        <div class="focus-modal__mark focus-modal__mark--complete" aria-hidden="true">✓</div>
+        <p class="focus-modal__eyebrow">SESSION COMPLETE</p>
+        <h2 id="focusSummaryTitle">Learning summary</h2>
+        <p id="focusSummarySubtitle">Nice work showing up with intention.</p>
+        <div class="focus-summary__stats">
+          <div><strong id="summaryTime">00:00</strong><span>time focused</span></div>
+          <div><strong id="summaryVideos">0</strong><span>videos opened</span></div>
+          <div><strong id="summaryNudges">0</strong><span>distractions avoided</span></div>
+        </div>
+        <div class="focus-summary__topic"><span>Learning topic</span><strong id="summaryTopic">—</strong></div>
+        <button class="focus-button focus-button--wide" id="focusSummaryClose" type="button">Done</button>
+      </section>
+    </div>
+
     <div class="network-banner" id="networkBanner" role="status" hidden></div>
     <div class="page-loader" id="pageLoader" aria-label="Loading" hidden><span></span><span></span><span></span></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
