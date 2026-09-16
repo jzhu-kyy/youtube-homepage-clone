@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A polished YouTube homepage and watch experience built for the ProductSC developer challenge."
+    />
+    <title>YouTube Clone</title>
+    <link rel="preconnect" href="https://i.ytimg.com" />
+    <link rel="preconnect" href="https://www.youtube.com" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="light">
+    <div id="app" class="app-shell">
+      <header class="topbar">
+        <div class="topbar__start">
+          <button class="icon-button" id="menuButton" aria-label="Toggle navigation">
+            <span class="icon" data-icon="menu"></span>
+          </button>
+          <button class="brand" id="brandButton" aria-label="YouTube home">
+            <span class="brand__mark"><span class="brand__play"></span></span>
+            <span class="brand__word">YouTube</span>
+            <span class="brand__region">US</span>
+          </button>
+        </div>
+
+        <form class="search" id="searchForm" role="search">
+          <label class="search__field">
+            <span class="sr-only">Search</span>
+            <input id="searchInput" type="search" placeholder="Search or ask a question" autocomplete="off" />
+            <button class="search__ask" id="askButton" type="button"><span>✦</span> Ask YouTube</button>
+          </label>
+          <button class="search__submit" type="submit" aria-label="Search">
+            <span class="icon" data-icon="search"></span>
+          </button>
+          <button class="icon-button icon-button--filled search__mic" type="button" id="voiceButton" aria-label="Search with your voice">
+            <span class="icon" data-icon="mic"></span>
+          </button>
+        </form>
+
+        <div class="topbar__end">
+          <button class="create-button" id="createButton" type="button">
+            <span class="icon" data-icon="plus"></span>
+            <span>Create</span>
+          </button>
+          <button class="icon-button notification-button" id="notificationButton" type="button" aria-label="Notifications">
+            <span class="icon" data-icon="bell"></span>
+            <span class="notification-button__dot"></span>
+          </button>
+          <button class="avatar avatar--profile" id="profileButton" type="button" aria-label="Open profile menu">J</button>
+        </div>
+      </header>
+
+      <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+        <nav class="sidebar__nav" id="sidebarNav"></nav>
+        <p class="sidebar__footer">About · Press · Copyright<br />Contact · Creators · Advertise<br />Terms · Privacy · Safety</p>
+        <p class="sidebar__copyright">Clone demo · 2026</p>
+      </aside>
+
+      <main class="main" id="mainContent" tabindex="-1"></main>
+    </div>
+
+    <div class="menu-popover" id="profileMenu" hidden>
+      <div class="profile-card">
+        <span class="avatar avatar--profile">J</span>
+        <div><strong>Judy</strong><span>@judybuilds</span></div>
+      </div>
+      <button data-action="theme"><span class="icon" data-icon="moon"></span>Appearance</button>
+      <button data-action="settings"><span class="icon" data-icon="settings"></span>Settings</button>
+      <button data-action="feedback"><span class="icon" data-icon="help"></span>Send feedback</button>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
