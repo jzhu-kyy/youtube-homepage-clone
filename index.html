@@ -49,7 +49,7 @@
             <span class="icon" data-icon="bell"></span>
             <span class="notification-button__dot"></span>
           </button>
-          <button class="avatar avatar--profile" id="profileButton" type="button" aria-label="Open profile menu">J</button>
+          <button class="sign-in-button" id="profileButton" type="button" aria-label="Sign in">Sign in</button>
         </div>
       </header>
 
@@ -64,14 +64,38 @@
 
     <div class="menu-popover" id="profileMenu" hidden>
       <div class="profile-card">
-        <span class="avatar avatar--profile">J</span>
-        <div><strong>Judy</strong><span>@judybuilds</span></div>
+        <span class="avatar avatar--profile" id="profileMenuAvatar">J</span>
+        <div><strong id="profileMenuName">Guest</strong><span id="profileMenuEmail">Not signed in</span></div>
       </div>
       <button data-action="theme"><span class="icon" data-icon="moon"></span>Appearance</button>
       <button data-action="settings"><span class="icon" data-icon="settings"></span>Settings</button>
       <button data-action="feedback"><span class="icon" data-icon="help"></span>Send feedback</button>
+      <button data-action="logout" id="logoutButton"><span class="icon" data-icon="history"></span>Sign out</button>
     </div>
 
+    <div class="auth-backdrop" id="authModal" hidden>
+      <section class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+        <button class="icon-button auth-modal__close" id="authClose" type="button" aria-label="Close"><span aria-hidden="true">×</span></button>
+        <span class="brand auth-modal__brand"><span class="brand__mark"><span class="brand__play"></span></span><span class="brand__word">YouTube</span></span>
+        <h2 id="authTitle">Sign in</h2>
+        <p id="authSubtitle">Continue to your saved videos and watch history.</p>
+        <div class="auth-tabs" role="tablist">
+          <button class="is-active" type="button" data-auth-tab="login" role="tab">Sign in</button>
+          <button type="button" data-auth-tab="signup" role="tab">Create account</button>
+        </div>
+        <form id="authForm" novalidate>
+          <label class="auth-field" id="nameField" hidden><span>Name</span><input id="authName" name="name" autocomplete="name" /></label>
+          <label class="auth-field"><span>Email</span><input id="authEmail" name="email" type="email" autocomplete="email" required /></label>
+          <label class="auth-field"><span>Password</span><input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="8" required /></label>
+          <p class="form-message" id="authMessage" role="alert"></p>
+          <button class="auth-submit" id="authSubmit" type="submit"><span class="button-label">Sign in</span><span class="button-spinner" hidden></span></button>
+        </form>
+        <p class="auth-modal__note">Your account, favorites, and history are stored securely by the demo backend.</p>
+      </section>
+    </div>
+
+    <div class="network-banner" id="networkBanner" role="status" hidden></div>
+    <div class="page-loader" id="pageLoader" aria-label="Loading" hidden><span></span><span></span><span></span></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
   </body>

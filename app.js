@@ -213,8 +213,15 @@ const state = {
   sort: "Recommended",
   compact: false,
   liked: new Set(),
+  userLikes: new Set(),
   subscribed: new Set(),
-  descriptionOpen: false
+  descriptionOpen: false,
+  user: null,
+  authToken: localStorage.getItem("yt_auth_token") || "",
+  authMode: "login",
+  library: { favorites: [], history: [] },
+  libraryLoading: false,
+  libraryError: ""
 };
 
 const app = document.getElementById("app");
@@ -222,6 +229,21 @@ const main = document.getElementById("mainContent");
 const sidebarNav = document.getElementById("sidebarNav");
 const searchInput = document.getElementById("searchInput");
 const profileMenu = document.getElementById("profileMenu");
+const profileButton = document.getElementById("profileButton");
+const profileMenuAvatar = document.getElementById("profileMenuAvatar");
+const profileMenuName = document.getElementById("profileMenuName");
+const profileMenuEmail = document.getElementById("profileMenuEmail");
+const logoutButton = document.getElementById("logoutButton");
+const authModal = document.getElementById("authModal");
+const authForm = document.getElementById("authForm");
+const authName = document.getElementById("authName");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const authMessage = document.getElementById("authMessage");
+const authSubmit = document.getElementById("authSubmit");
+const nameField = document.getElementById("nameField");
+const networkBanner = document.getElementById("networkBanner");
+const pageLoader = document.getElementById("pageLoader");
 const toast = document.getElementById("toast");
 
 function escapeHtml(value) {
@@ -247,6 +269,38 @@ function thumbnail(video) {
   return `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
 }
 
+function videoPayload(video) {
+  return { id: video.id, title: video.title, channel: video.channel, duration: video.duration, thumbnail: thumbnail(video) };
+}
+
+async function api(path, options = {}) {
+  const headers = { ...(options.body ? { "content-type": "application/json" } : {}), ...(options.headers || {}) };
+  if (state.authToken) headers.authorization = `Bearer ${state.authToken}`;
+  let response;
+  try {
+    response = await fetch(path, { ...options, headers });
+  } catch {
+    showNetworkMessage("Can’t reach the server. Check your connection and try again.");
+    throw new Error("Can’t reach the server");
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || "Something went wrong");
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function showNetworkMessage(message) {
+  networkBanner.textContent = message;
+  networkBanner.hidden = false;
+}
+
+function hideNetworkMessage() {
+  networkBanner.hidden = true;
+}
+
 function verifiedBadge(video) {
   return video.verified ? '<span class="verified" title="Verified"><span class="icon" data-icon="check"></span></span>' : "";
 }
@@ -262,6 +316,98 @@ function renderSidebar() {
         </button>`).join("")}
     </section>
   `).join("");
+}
+
+function setAuthMode(mode) {
+  state.authMode = mode;
+  const signingUp = mode === "signup";
+  document.querySelectorAll("[data-auth-tab]").forEach(button => button.classList.toggle("is-active", button.dataset.authTab === mode));
+  document.getElementById("authTitle").textContent = signingUp ? "Create your account" : "Sign in";
+  document.getElementById("authSubtitle").textContent = signingUp ? "Save videos and keep your history on every device." : "Continue to your saved videos and watch history.";
+  nameField.hidden = !signingUp;
+  authName.required = signingUp;
+  authPassword.autocomplete = signingUp ? "new-password" : "current-password";
+  authSubmit.querySelector(".button-label").textContent = signingUp ? "Create account" : "Sign in";
+  authMessage.textContent = "";
+}
+
+function openAuthModal(mode = "login") {
+  setAuthMode(mode);
+  authModal.hidden = false;
+  document.body.style.overflow = "hidden";
+  setTimeout(() => (mode === "signup" ? authName : authEmail).focus(), 0);
+}
+
+function closeAuthModal() {
+  authModal.hidden = true;
+  document.body.style.overflow = "";
+  authMessage.textContent = "";
+}
+
+function updateAuthUI() {
+  if (state.user) {
+    const initial = state.user.name.trim().charAt(0).toUpperCase() || "U";
+    profileButton.className = "profile-button--signed-in";
+    profileButton.textContent = initial;
+    profileButton.setAttribute("aria-label", `Open profile for ${state.user.name}`);
+    profileMenuAvatar.textContent = initial;
+    profileMenuName.textContent = state.user.name;
+    profileMenuEmail.textContent = state.user.email;
+    logoutButton.hidden = false;
+  } else {
+    profileButton.className = "sign-in-button";
+    profileButton.textContent = "Sign in";
+    profileButton.setAttribute("aria-label", "Sign in");
+    profileMenuName.textContent = "Guest";
+    profileMenuEmail.textContent = "Not signed in";
+    logoutButton.hidden = true;
+    profileMenu.hidden = true;
+  }
+}
+
+function clearSession() {
+  state.user = null;
+  state.authToken = "";
+  state.library = { favorites: [], history: [] };
+  state.liked.clear();
+  localStorage.removeItem("yt_auth_token");
+  updateAuthUI();
+}
+
+async function restoreSession() {
+  if (!state.authToken) {
+    updateAuthUI();
+    return;
+  }
+  pageLoader.hidden = false;
+  try {
+    const data = await api("/api/auth");
+    state.user = data.user;
+    updateAuthUI();
+    await loadLibrary(false);
+  } catch (error) {
+    if (error.status === 401) clearSession();
+  } finally {
+    pageLoader.hidden = true;
+  }
+}
+
+async function loadLibrary(shouldRender = true) {
+  if (!state.user) return;
+  state.libraryLoading = true;
+  state.libraryError = "";
+  if (shouldRender && ["#history", "#favorites"].includes(location.hash)) render();
+  try {
+    state.library = await api("/api/library");
+    state.liked = new Set(state.library.favorites.map(item => item.id));
+    hideNetworkMessage();
+  } catch (error) {
+    state.libraryError = error.message;
+    if (error.status === 401) clearSession();
+  } finally {
+    state.libraryLoading = false;
+    if (shouldRender && ["#history", "#favorites"].includes(location.hash)) render();
+  }
 }
 
 function videoCard(video) {
@@ -350,6 +496,61 @@ function renderHome() {
   bindHomeEvents();
 }
 
+function libraryCard(item, kind) {
+  const date = item[kind === "history" ? "watchedAt" : "savedAt"];
+  return `
+    <article class="library-card" data-video-id="${escapeHtml(item.id)}" tabindex="0" aria-label="Watch ${escapeHtml(item.title)}">
+      <div class="video-card__thumb-wrap">
+        <img class="video-card__thumb" src="${escapeHtml(item.thumbnail || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`)}" alt="" loading="lazy" />
+        ${item.duration ? `<span class="video-card__duration">${escapeHtml(item.duration)}</span>` : ""}
+      </div>
+      <div class="video-card__body">
+        <div>
+          <h2 class="video-card__title">${escapeHtml(item.title)}</h2>
+          <p class="video-card__channel">${escapeHtml(item.channel)}</p>
+          <time datetime="${escapeHtml(date || "")}">${kind === "history" ? "Watched" : "Saved"} ${date ? new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "recently"}</time>
+        </div>
+        ${kind === "favorites" ? `<button class="icon-button more-button" data-remove-favorite="${escapeHtml(item.id)}" aria-label="Remove from saved videos"><span aria-hidden="true">×</span></button>` : ""}
+      </div>
+    </article>`;
+}
+
+function librarySkeleton() {
+  return `<div class="skeleton-grid" aria-label="Loading videos">${Array.from({ length: 6 }, () => `<div><div class="skeleton-card__thumb"></div><div class="skeleton-line"></div><div class="skeleton-line skeleton-line--short"></div></div>`).join("")}</div>`;
+}
+
+function renderLibrary(kind) {
+  const isHistory = kind === "history";
+  const title = isHistory ? "Watch history" : "Saved videos";
+  const items = state.library[isHistory ? "history" : "favorites"] || [];
+  let content;
+
+  if (!state.user) {
+    content = `<div class="empty-state"><div><div class="empty-state__icon">${isHistory ? "◷" : "♡"}</div><h2>Keep track of what you watch</h2><p>Sign in to see your ${isHistory ? "watch history" : "saved videos"} on any device.</p><div class="empty-state__actions"><button data-open-auth>Sign in</button></div></div></div>`;
+  } else if (state.libraryLoading) {
+    content = librarySkeleton();
+  } else if (state.libraryError) {
+    content = `<div class="empty-state"><div><div class="empty-state__icon">!</div><h2>Couldn’t load this page</h2><p>${escapeHtml(state.libraryError)}</p><div class="empty-state__actions"><button data-retry-library>Try again</button></div></div></div>`;
+  } else if (!items.length) {
+    content = `<div class="empty-state"><div><div class="empty-state__icon">${isHistory ? "◷" : "♡"}</div><h2>${isHistory ? "No watch history yet" : "No saved videos yet"}</h2><p>${isHistory ? "Videos you watch will appear here." : "Tap Save on a video and it will appear here."}</p><div class="empty-state__actions"><button data-go-home>Browse videos</button></div></div></div>`;
+  } else {
+    content = `<div class="library-grid">${items.map(item => libraryCard(item, kind)).join("")}</div>`;
+  }
+
+  main.innerHTML = `<section class="library-shell"><header class="library-header"><div><h1>${title}</h1><p>${state.user ? `${items.length} video${items.length === 1 ? "" : "s"} · Synced to ${escapeHtml(state.user.email)}` : "Sign in to sync this page"}</p></div>${isHistory && state.user && items.length ? `<button class="library-header__action" id="clearHistory">Clear all watch history</button>` : ""}</header>${content}</section>`;
+
+  document.querySelector("[data-open-auth]")?.addEventListener("click", () => openAuthModal());
+  document.querySelector("[data-retry-library]")?.addEventListener("click", () => loadLibrary());
+  document.querySelector("[data-go-home]")?.addEventListener("click", () => { location.hash = ""; });
+  document.getElementById("clearHistory")?.addEventListener("click", clearHistory);
+  document.querySelectorAll("[data-remove-favorite]").forEach(button => button.addEventListener("click", event => {
+    event.stopPropagation();
+    const video = videos.find(item => item.id === button.dataset.removeFavorite) || state.library.favorites.find(item => item.id === button.dataset.removeFavorite);
+    if (video) toggleFavorite(video);
+  }));
+  bindVideoLinks(main);
+}
+
 function getSelectedVideo() {
   const id = new URLSearchParams(location.hash.replace(/^#/, "")).get("watch");
   return videos.find(video => video.id === id) || null;
@@ -371,7 +572,8 @@ function upNextCard(video) {
 }
 
 function renderWatch(video) {
-  const isLiked = state.liked.has(video.id);
+  const isLiked = state.userLikes.has(video.id);
+  const isSaved = state.liked.has(video.id);
   const isSubscribed = state.subscribed.has(video.channel);
   const recommendations = videos.filter(item => item.id !== video.id).slice(0, 8);
   main.innerHTML = `
@@ -391,7 +593,7 @@ function renderWatch(video) {
               </div>
               <button class="action-pill ${isLiked ? "is-active" : ""}" id="likeButton"><span class="icon" data-icon="like"></span>${isLiked ? "Liked" : "24K"}</button>
               <button class="action-pill" id="shareButton"><span class="icon" data-icon="share"></span>Share</button>
-              <button class="action-pill" id="saveButton"><span class="icon" data-icon="save"></span>Save</button>
+              <button class="action-pill ${isSaved ? "is-active" : ""}" id="saveButton"><span class="icon" data-icon="save"></span>${isSaved ? "Saved" : "Save"}</button>
               <button class="icon-button icon-button--filled" aria-label="More"><span class="icon" data-icon="more"></span></button>
             </div>
             <div class="description-box ${state.descriptionOpen ? "is-open" : ""}" id="descriptionBox">
@@ -416,6 +618,16 @@ function renderWatch(video) {
 }
 
 function render() {
+  if (location.hash === "#history") {
+    renderLibrary("history");
+    window.scrollTo({ top: 0, behavior: "instant" });
+    return;
+  }
+  if (location.hash === "#favorites") {
+    renderLibrary("favorites");
+    window.scrollTo({ top: 0, behavior: "instant" });
+    return;
+  }
   const selected = getSelectedVideo();
   if (selected) renderWatch(selected);
   else renderHome();
@@ -424,6 +636,47 @@ function render() {
 
 function openVideo(id) {
   location.hash = `watch=${encodeURIComponent(id)}`;
+  const video = videos.find(item => item.id === id);
+  if (video && state.user) recordWatch(video);
+}
+
+async function recordWatch(video) {
+  try {
+    state.library = await api("/api/library", { method: "POST", body: JSON.stringify({ action: "watch", video: videoPayload(video) }) });
+  } catch (error) {
+    if (error.status === 401) clearSession();
+  }
+}
+
+async function toggleFavorite(video) {
+  if (!state.user) {
+    openAuthModal();
+    showToast("Sign in to save videos");
+    return;
+  }
+  const wasSaved = state.liked.has(video.id);
+  try {
+    state.library = await api("/api/library", { method: "POST", body: JSON.stringify({ action: "favorite", video: videoPayload(video) }) });
+    state.liked = new Set(state.library.favorites.map(item => item.id));
+    render();
+    showToast(wasSaved ? "Removed from saved videos" : "Saved to your library");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function clearHistory() {
+  try {
+    state.libraryLoading = true;
+    renderLibrary("history");
+    state.library = await api("/api/library", { method: "POST", body: JSON.stringify({ action: "clear-history" }) });
+    showToast("Watch history cleared");
+  } catch (error) {
+    state.libraryError = error.message;
+  } finally {
+    state.libraryLoading = false;
+    renderLibrary("history");
+  }
 }
 
 function bindVideoLinks(root = document) {
@@ -469,9 +722,9 @@ function bindHomeEvents() {
 
 function bindWatchEvents(video) {
   document.getElementById("likeButton").addEventListener("click", () => {
-    if (state.liked.has(video.id)) state.liked.delete(video.id); else state.liked.add(video.id);
+    if (state.userLikes.has(video.id)) state.userLikes.delete(video.id); else state.userLikes.add(video.id);
     renderWatch(video);
-    showToast(state.liked.has(video.id) ? "Added to liked videos" : "Removed from liked videos");
+    showToast(state.userLikes.has(video.id) ? "Liked" : "Like removed");
   });
   document.getElementById("subscribeButton").addEventListener("click", () => {
     if (state.subscribed.has(video.channel)) state.subscribed.delete(video.channel); else state.subscribed.add(video.channel);
@@ -488,11 +741,18 @@ function bindWatchEvents(video) {
       showToast("Video link copied");
     } catch { showToast("Share link ready"); }
   });
-  document.getElementById("saveButton").addEventListener("click", () => showToast("Saved to Watch later"));
+  document.getElementById("saveButton").addEventListener("click", () => toggleFavorite(video));
   document.getElementById("commentInput").addEventListener("keydown", event => {
     if (event.key !== "Enter" || !event.target.value.trim()) return;
+    if (!state.user) {
+      event.preventDefault();
+      openAuthModal();
+      showToast("Sign in to comment");
+      return;
+    }
     const text = event.target.value.trim();
-    document.getElementById("commentList").insertAdjacentHTML("afterbegin", `<article class="comment"><span class="avatar avatar--profile">J</span><div><div class="comment__name">@judybuilds<span>now</span></div><p>${escapeHtml(text)}</p><div class="comment__actions"><span class="icon" data-icon="like"></span>0<span>Reply</span></div></div></article>`);
+    const initial = state.user.name.charAt(0).toUpperCase();
+    document.getElementById("commentList").insertAdjacentHTML("afterbegin", `<article class="comment"><span class="avatar avatar--profile">${escapeHtml(initial)}</span><div><div class="comment__name">${escapeHtml(state.user.name)}<span>now</span></div><p>${escapeHtml(text)}</p><div class="comment__actions"><span class="icon" data-icon="like"></span>0<span>Reply</span></div></div></article>`);
     event.target.value = "";
     showToast("Comment added locally");
   });
@@ -548,19 +808,68 @@ document.getElementById("askButton").addEventListener("click", () => showToast("
 document.getElementById("createButton").addEventListener("click", () => showToast("Create menu opened"));
 document.getElementById("notificationButton").addEventListener("click", () => showToast("You’re all caught up"));
 
-document.getElementById("profileButton").addEventListener("click", event => {
+profileButton.addEventListener("click", event => {
   event.stopPropagation();
+  if (!state.user) {
+    openAuthModal();
+    return;
+  }
   profileMenu.hidden = !profileMenu.hidden;
 });
 
 profileMenu.addEventListener("click", event => {
   const button = event.target.closest("button");
   if (!button) return;
-  if (button.dataset.action === "theme") {
+  if (button.dataset.action === "logout") {
+    api("/api/auth", { method: "POST", body: JSON.stringify({ action: "logout" }) }).catch(() => {});
+    clearSession();
+    profileMenu.hidden = true;
+    render();
+    showToast("Signed out");
+  } else if (button.dataset.action === "theme") {
     document.body.classList.toggle("light");
     showToast(document.body.classList.contains("light") ? "Light theme" : "Dark theme");
   } else showToast(`${button.textContent.trim()} opened`);
   profileMenu.hidden = true;
+});
+
+document.querySelectorAll("[data-auth-tab]").forEach(button => button.addEventListener("click", () => setAuthMode(button.dataset.authTab)));
+document.getElementById("authClose").addEventListener("click", closeAuthModal);
+authModal.addEventListener("click", event => {
+  if (event.target === authModal) closeAuthModal();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !authModal.hidden) closeAuthModal();
+});
+
+authForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  authMessage.textContent = "";
+  if (!authForm.reportValidity()) return;
+  authSubmit.disabled = true;
+  authSubmit.querySelector(".button-label").hidden = true;
+  authSubmit.querySelector(".button-spinner").hidden = false;
+  try {
+    const data = await api("/api/auth", {
+      method: "POST",
+      body: JSON.stringify({ action: state.authMode, name: authName.value.trim(), email: authEmail.value.trim(), password: authPassword.value })
+    });
+    state.authToken = data.token;
+    state.user = data.user;
+    localStorage.setItem("yt_auth_token", data.token);
+    updateAuthUI();
+    await loadLibrary(false);
+    closeAuthModal();
+    authForm.reset();
+    render();
+    showToast(state.authMode === "signup" ? "Account created" : "Signed in");
+  } catch (error) {
+    authMessage.textContent = error.message;
+  } finally {
+    authSubmit.disabled = false;
+    authSubmit.querySelector(".button-label").hidden = false;
+    authSubmit.querySelector(".button-spinner").hidden = true;
+  }
 });
 
 document.addEventListener("click", event => {
@@ -579,11 +888,30 @@ sidebarNav.addEventListener("click", event => {
     searchInput.value = "";
     location.hash = "";
     renderHome();
+  } else if (label === "History") {
+    location.hash = "history";
+  } else if (["Watch later", "Liked videos"].includes(label)) {
+    location.hash = "favorites";
   } else showToast(`${label} selected`);
   app.classList.remove("is-mobile-nav-open");
 });
 
 window.addEventListener("hashchange", render);
 
+window.addEventListener("offline", () => showNetworkMessage("You’re offline. Saved pages remain visible, but syncing is paused."));
+window.addEventListener("online", () => {
+  hideNetworkMessage();
+  if (state.user) loadLibrary();
+});
+
+document.addEventListener("error", event => {
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement) || image.dataset.fallbackApplied) return;
+  image.dataset.fallbackApplied = "true";
+  image.src = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 360'%3E%3Crect width='640' height='360' fill='%23e5e5e5'/%3E%3Cpath d='M285 128v104l91-52z' fill='%23909090'/%3E%3C/svg%3E";
+}, true);
+
 renderSidebar();
+updateAuthUI();
 render();
+restoreSession().then(render);
