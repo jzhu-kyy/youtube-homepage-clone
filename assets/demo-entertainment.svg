@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff3a8c"/><stop offset=".45" stop-color="#ff8d1f"/><stop offset="1" stop-color="#4213c8"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="20" stdDeviation="20" flood-color="#4a0048" flood-opacity=".35"/></filter>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <circle cx="220" cy="155" r="180" fill="#ffe451" opacity=".55"/><circle cx="1050" cy="410" r="290" fill="#3310aa" opacity=".4"/>
+  <g fill="none" stroke="white" stroke-opacity=".3"><rect x="70" y="60" width="320" height="320" transform="rotate(23 230 220)"/><rect x="855" y="110" width="350" height="350" transform="rotate(-18 1030 285)"/><circle cx="650" cy="350" r="300"/></g>
+  <text x="640" y="140" fill="white" font-family="Arial" font-size="21" font-weight="700" text-anchor="middle" letter-spacing="7">WEEKLY DROP</text>
+  <text x="640" y="298" fill="white" font-family="Arial" font-size="84" font-weight="900" text-anchor="middle" filter="url(#shadow)">THE INTERNET'S</text>
+  <text x="640" y="394" fill="white" font-family="Arial" font-size="100" font-weight="900" text-anchor="middle" filter="url(#shadow)">WILDEST MOMENTS</text>
+  <g transform="translate(475 470)" font-family="Arial" font-size="28" font-weight="900" text-anchor="middle"><rect width="90" height="90" rx="24" fill="white" fill-opacity=".17" stroke="white" stroke-opacity=".4"/><text x="45" y="56" fill="white">01</text><rect x="120" width="90" height="90" rx="24" fill="white" fill-opacity=".17" stroke="white" stroke-opacity=".4"/><text x="165" y="56" fill="white">02</text><rect x="240" width="90" height="90" rx="24" fill="white" fill-opacity=".17" stroke="white" stroke-opacity=".4"/><text x="285" y="56" fill="white">03</text></g>
+  <rect x="1100" y="620" width="110" height="50" rx="14" fill="#16051f" opacity=".9"/><text x="1134" y="653" fill="white" font-family="Arial" font-size="22" font-weight="700">9:08</text>
+</svg>

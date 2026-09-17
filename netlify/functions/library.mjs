@@ -30,6 +30,8 @@ export default async (req) => {
       topic: String(body.session.topic || "").trim().slice(0, 60),
       durationSeconds: Math.max(0, Math.min(86400, Number(body.session.durationSeconds) || 0)),
       videosWatched: Math.max(0, Math.min(100, Number(body.session.videosWatched) || 0)),
+      onTopicVideos: Math.max(0, Math.min(100, Number(body.session.onTopicVideos) || 0)),
+      offTopicVideos: Math.max(0, Math.min(100, Number(body.session.offTopicVideos) || 0)),
       distractionsAvoided: Math.max(0, Math.min(100, Number(body.session.distractionsAvoided) || 0)),
       endedAt: String(body.session.endedAt || new Date().toISOString()).slice(0, 40),
     } : null;

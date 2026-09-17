@@ -2,6 +2,44 @@
 
 const videos = [
   {
+    id: "demo-web-development",
+    title: "Web Dev Bootcamp: Build a Responsive Portfolio",
+    channel: "FocusTube Academy",
+    handle: "@FocusTubeAcademy",
+    avatar: "FT",
+    avatarColor: "linear-gradient(145deg,#4f46e5,#06b6d4)",
+    category: "Coding",
+    views: 184000,
+    ageDays: 2,
+    duration: "14:20",
+    subscribers: "126K subscribers",
+    verified: true,
+    demo: true,
+    demoRelevance: "relevant",
+    thumbnail: "assets/demo-web-development.svg",
+    searchTerms: "focus demo web dev web development html css javascript responsive portfolio learning",
+    description: "A simulated FocusTube lesson that builds a responsive portfolio from semantic HTML, modern CSS, and a small JavaScript interaction."
+  },
+  {
+    id: "demo-viral-entertainment",
+    title: "The Internet’s Wildest Celebrity Moments This Week",
+    channel: "Trend Rush",
+    handle: "@TrendRushDaily",
+    avatar: "TR",
+    avatarColor: "linear-gradient(145deg,#ec4899,#f97316)",
+    category: "Entertainment",
+    views: 2800000,
+    ageDays: 1,
+    duration: "9:08",
+    subscribers: "3.8M subscribers",
+    verified: true,
+    demo: true,
+    demoRelevance: "off-topic",
+    thumbnail: "assets/demo-entertainment.svg",
+    searchTerms: "focus demo entertainment celebrity viral trends unrelated off topic web dev",
+    description: "A simulated entertainment video used to demonstrate FocusTube’s off-topic check during a learning session."
+  },
+  {
     id: "M7lc1UVf-VE",
     title: "YouTube Developers Live: Embedded Web Player Customization",
     channel: "Google for Developers",
@@ -288,7 +326,7 @@ function formatAge(days) {
 }
 
 function thumbnail(video) {
-  return `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
+  return video.thumbnail || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`;
 }
 
 function videoPayload(video) {
@@ -358,6 +396,7 @@ function startFocusTimer() {
 
 function videoMatchesFocus(video) {
   if (!state.focus.active) return true;
+  if (video.demoRelevance) return video.demoRelevance === "relevant";
   const topic = state.focus.topic.toLowerCase();
   const ignored = new Set(["the", "and", "for", "with", "from", "learn", "learning", "study", "about"]);
   const tokens = topic.split(/[^a-z0-9]+/).filter(token => token.length > 2 && !ignored.has(token));
@@ -430,10 +469,16 @@ async function saveFocusSummary(summary) {
 
 function endFocusSession() {
   if (!state.focus.active) return;
+  const watchedVideos = state.focus.watched.map(id => videos.find(video => video.id === id)).filter(Boolean);
+  const onTopicVideos = watchedVideos.filter(videoMatchesFocus).length;
+  const offTopicVideos = watchedVideos.length - onTopicVideos;
+  const alignment = watchedVideos.length ? Math.round((onTopicVideos / watchedVideos.length) * 100) : 100;
   const summary = {
     topic: state.focus.topic,
     durationSeconds: focusElapsedSeconds(),
     videosWatched: state.focus.watched.length,
+    onTopicVideos,
+    offTopicVideos,
     distractionsAvoided: state.focus.distractionsAvoided,
     endedAt: new Date().toISOString()
   };
@@ -443,10 +488,13 @@ function endFocusSession() {
   focusIsland.hidden = true;
   focusNudge.hidden = true;
   document.getElementById("summaryTime").textContent = formatFocusTime(summary.durationSeconds);
-  document.getElementById("summaryVideos").textContent = String(summary.videosWatched);
+  document.getElementById("summaryVideos").textContent = String(summary.onTopicVideos);
+  document.getElementById("summaryOffTopic").textContent = String(summary.offTopicVideos);
   document.getElementById("summaryNudges").textContent = String(summary.distractionsAvoided);
   document.getElementById("summaryTopic").textContent = summary.topic;
-  document.getElementById("focusSummarySubtitle").textContent = summary.videosWatched ? "Nice work showing up with intention." : "You protected time for your learning goal.";
+  document.getElementById("summaryAlignment").textContent = `${alignment}%`;
+  document.getElementById("summaryAlignmentBar").style.width = `${alignment}%`;
+  document.getElementById("focusSummarySubtitle").textContent = summary.offTopicVideos ? "You explored both paths—here’s how your focus held up." : summary.videosWatched ? "Nice work showing up with intention." : "You protected time for your learning goal.";
   focusSummaryModal.hidden = false;
   document.body.style.overflow = "hidden";
   saveFocusSummary(summary);
@@ -573,6 +621,7 @@ function videoCard(video) {
       <div class="video-card__body">
         <span class="avatar video-card__avatar" style="background:${video.avatarColor}">${escapeHtml(video.avatar)}</span>
         <div>
+          ${video.demo ? `<span class="demo-video-badge demo-video-badge--${video.demoRelevance}">${video.demoRelevance === "relevant" ? "ON-TOPIC DEMO" : "OFF-TOPIC DEMO"}</span>` : ""}
           <h2 class="video-card__title">${escapeHtml(video.title)}</h2>
           <p class="video-card__channel">${escapeHtml(video.channel)}${verifiedBadge(video)}</p>
           <p class="video-card__stats">${formatViews(video.views)} · ${formatAge(video.ageDays)}</p>
@@ -586,7 +635,7 @@ function filteredVideos() {
   const query = state.query.trim().toLowerCase();
   let result = videos.filter(video => {
     const matchesCategory = state.category === "All" || video.category === state.category || (state.category === "Live" && video.duration === "LIVE");
-    const haystack = `${video.title} ${video.channel} ${video.category}`.toLowerCase();
+    const haystack = `${video.title} ${video.channel} ${video.category} ${video.description || ""} ${video.searchTerms || ""}`.toLowerCase();
     return matchesCategory && (!query || haystack.includes(query));
   });
   if (state.sort === "Most viewed") result = [...result].sort((a, b) => b.views - a.views);
@@ -595,7 +644,7 @@ function filteredVideos() {
 }
 
 function sponsoredCard() {
-  const video = videos[0];
+  const video = videos.find(item => item.id === "M7lc1UVf-VE");
   return `
     <article class="sponsored-card">
       <div class="video-card__thumb-wrap" data-video-id="${video.id}" tabindex="0" aria-label="Watch ${escapeHtml(video.title)}">
@@ -629,16 +678,17 @@ function renderHome() {
   main.innerHTML = `
     <div class="feed-shell">
       ${isFocusFeed ? `<header class="focus-feed-header"><div><p class="focus-feed-header__eyebrow">DISTRACTION-FREE FEED</p><h1>Learn ${escapeHtml(state.focus.topic)}</h1><p>Shorts and entertainment recommendations are hidden during this session.</p></div><span class="focus-feed-header__badge">${results.length} focused picks</span></header>` : ""}
+      ${isFocusFeed ? `<section class="focus-demo-strip" aria-label="FocusTube presentation examples"><div><span class="focus-demo-strip__eyebrow">PRESENTATION DEMO</span><strong>Try both FocusTube outcomes</strong><small>Open a related lesson, then test an off-topic video and choose “Watch anyway” to compare them in your summary.</small></div><div class="focus-demo-strip__actions"><button data-demo-video="demo-web-development"><span>✓</span>Related example</button><button data-demo-video="demo-viral-entertainment"><span>!</span>Off-topic example</button></div></section>` : ""}
       <div class="chips-bar" aria-label="Video categories">
         ${categories.map(category => `<button class="chip ${state.feedChip === category ? "is-active" : ""}" data-category="${category}">${category}</button>`).join("")}
       </div>
       ${isFocusFeed ? `${results.length ? `<div class="video-grid">${results.map(videoCard).join("")}</div>` : `<div class="empty-state"><div><div class="empty-state__icon">◎</div><h2>No focused videos found</h2><p>Try a broader learning topic or use search.</p></div></div>`}` : isDefaultFeed ? `
-        <div class="home-top-grid">${sponsoredCard()}${videos.slice(1, 3).map(videoCard).join("")}</div>
+        <div class="home-top-grid">${sponsoredCard()}${videos.filter(video => !video.demo).slice(1, 3).map(videoCard).join("")}</div>
         <section class="shorts-shelf" aria-labelledby="shortsHeading">
           <div class="shorts-shelf__header"><h2 class="shorts-shelf__title" id="shortsHeading"><span class="shorts-shelf__logo"></span>Shorts</h2><button class="icon-button" aria-label="Shorts actions"><span class="icon" data-icon="more"></span></button></div>
           <div class="shorts-grid">${shorts.map(shortCard).join("")}</div>
         </section>
-        <div class="video-grid">${videos.slice(3).map(videoCard).join("")}</div>
+        <div class="video-grid">${videos.filter(video => !video.demo).slice(3).map(videoCard).join("")}</div>
       ` : `
         <div class="feed-heading">
           <div><h1>${heading}</h1><span class="feed-heading__meta">${results.length} video${results.length === 1 ? "" : "s"}</span></div>
@@ -735,8 +785,12 @@ function renderWatch(video) {
     <div class="watch-shell">
       <div class="watch-layout">
         <section class="watch-primary">
-          <div class="player-frame">
-            <iframe src="https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0" title="${escapeHtml(video.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+          <div class="player-frame ${video.demo ? `player-frame--demo player-frame--${video.demoRelevance}` : ""}">
+            ${video.demo ? `<div class="demo-player" aria-label="Simulated video player for ${escapeHtml(video.title)}">
+              <div class="demo-player__top"><span>FOCUSTUBE ORIGINAL</span><span>SIMULATED VIDEO</span></div>
+              ${video.demoRelevance === "relevant" ? `<div class="demo-player__lesson"><div class="demo-player__code"><span>&lt;main class="portfolio"&gt;</span><span>&nbsp;&nbsp;&lt;h1&gt;Hello, I’m Alex.&lt;/h1&gt;</span><span>&nbsp;&nbsp;&lt;p&gt;Designer + Developer&lt;/p&gt;</span><span>&lt;/main&gt;</span><i></i><i></i><i></i></div><div class="demo-player__preview"><b>PORTFOLIO</b><strong>Designing thoughtful<br/>digital experiences.</strong><button>View projects</button></div></div>` : `<div class="demo-player__entertainment"><span>WEEKLY DROP</span><strong>THE INTERNET’S<br/>WILDEST MOMENTS</strong><div><i>01</i><i>02</i><i>03</i></div></div>`}
+              <div class="demo-player__controls"><button class="demo-player__toggle" id="demoPlayerToggle" type="button" aria-label="Pause simulated video">Ⅱ</button><span class="demo-player__timeline"><i></i></span><time>00:18 / ${video.duration}</time><span>⚙</span><span>⛶</span></div>
+            </div>` : `<iframe src="https://www.youtube.com/embed/${video.id}?autoplay=1&rel=0" title="${escapeHtml(video.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`}
           </div>
           <div class="watch-detail">
             ${state.focus.active ? `<div class="focus-watch-context"><span>◎ FocusTube</span>Learning ${escapeHtml(state.focus.topic)}</div>` : ""}
@@ -855,6 +909,7 @@ function bindVideoLinks(root = document) {
 }
 
 function bindHomeEvents() {
+  document.querySelectorAll("[data-demo-video]").forEach(button => button.addEventListener("click", () => openVideo(button.dataset.demoVideo)));
   document.querySelectorAll("[data-category]").forEach(button => button.addEventListener("click", () => {
     state.feedChip = button.dataset.category;
     state.category = videos.some(video => video.category === button.dataset.category) ? button.dataset.category : "All";
@@ -883,6 +938,13 @@ function bindHomeEvents() {
 }
 
 function bindWatchEvents(video) {
+  document.getElementById("demoPlayerToggle")?.addEventListener("click", event => {
+    const player = event.currentTarget.closest(".demo-player");
+    const paused = player.classList.toggle("is-paused");
+    event.currentTarget.textContent = paused ? "▶" : "Ⅱ";
+    event.currentTarget.setAttribute("aria-label", paused ? "Play simulated video" : "Pause simulated video");
+    showToast(paused ? "Demo video paused" : "Demo video playing");
+  });
   document.getElementById("likeButton").addEventListener("click", () => {
     if (state.userLikes.has(video.id)) state.userLikes.delete(video.id); else state.userLikes.add(video.id);
     renderWatch(video);
